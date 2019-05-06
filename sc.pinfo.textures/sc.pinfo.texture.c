@@ -115,18 +115,25 @@ void sc_pinfo_textures_set_recursion(t_sc_pinfo_textures *x, void *attr, long ar
 
 void sc_pinfo_textures_set_context(t_sc_pinfo_textures *x, void *attr, long argc, t_atom *argv){
     if(argv && argc) {
+        char temp[255];
+        long ltemp;
         t_symbol ctemp = x->context;
         switch(atom_gettype(argv)) {
             case A_SYM:
-            ctemp = *(atom_getsym(argv));
-            break;
+                ctemp = *(atom_getsym(argv));
+                break;
+            case A_LONG:
+            ltemp = atom_getlong(argv);
+            sprintf(temp,"%lld",ltemp);
+                ctemp = *(gensym(temp));
+                break;
             default:
-            object_error((t_object*)x, "Bad value for context, expected a symbol");
-            return;
-            break;
+                object_error((t_object*)x, "Bad value for context, expected a symbol");
+                return;
+                break;
         }
         
-        x->context = ctemp;
+        x->context = (strcmp(ctemp.s_name, "0") == 0) ? *gensym("") : ctemp;
     }
 }
 
