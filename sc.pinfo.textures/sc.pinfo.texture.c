@@ -17,6 +17,7 @@ typedef struct _sc_pinfo_textures
     t_object    ob;
     long        parent_start;
     long        use_recursion;
+    t_symbol    context;
     void*       out;
 } t_sc_pinfo_textures;
 
@@ -26,16 +27,18 @@ void *t_sc_pinfo_textures_new(t_symbol* s, long argc, t_atom* argv);
 void t_sc_pinfo_textures_free(t_sc_pinfo_textures* x);
 void t_sc_pinfo_textures_assist(t_sc_pinfo_textures* x, void* b, long m, long a, char* s);
 void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x);
-long t_sc_pinfo_textures_search_sub(t_object* patcher);
-long t_sc_pinfo_textures_get_sub_names(t_atom** list, t_object* patcher);
+long t_sc_pinfo_textures_search_sub(t_object* patcher, t_symbol c);
+long t_sc_pinfo_textures_get_sub_names(t_atom** list, t_object* patcher, t_symbol c);
 
 //attribute accessors
 void sc_pinfo_textures_get_parent(t_sc_pinfo_textures *x, t_object *attr, long *argc, t_atom **argv);
 void sc_pinfo_textures_get_recursion(t_sc_pinfo_textures *x, t_object *attr, long *argc, t_atom **argv);
+void sc_pinfo_textures_get_context(t_sc_pinfo_textures *x, t_object *attr, long *argc, t_atom **argv);
 
 //attribute mutators
 void sc_pinfo_textures_set_parent(t_sc_pinfo_textures *x, void *attr, long argc, t_atom *argv);
 void sc_pinfo_textures_set_recursion(t_sc_pinfo_textures *x, void *attr, long argc, t_atom *argv);
+void sc_pinfo_textures_set_context(t_sc_pinfo_textures *x, void *attr, long argc, t_atom *argv);
 
 /* ==================== CLASS REGISTRATION ====================== */
 
@@ -57,6 +60,10 @@ void ext_main(void *r)
     CLASS_ATTR_STYLE(c, "check_children", 0, "onoff");
     CLASS_ATTR_ACCESSORS(c, "check_children", sc_pinfo_textures_get_recursion, sc_pinfo_textures_set_recursion);
     
+    CLASS_ATTR_SYM(c, "context", 0, t_sc_pinfo_textures, context);
+    CLASS_ATTR_STYLE(c, "context", 0, "text");
+    CLASS_ATTR_ACCESSORS(c, "context", sc_pinfo_textures_get_context, sc_pinfo_textures_set_context);
+    
     class_register(CLASS_BOX, c);
     sc_pinfo_textures_class = c;
 }
@@ -69,6 +76,8 @@ void t_sc_pinfo_textures_assist(t_sc_pinfo_textures* x, void* b, long m, long a,
     }
 }
 
+
+//ATTRIBUTE MUTATORS
 
 void sc_pinfo_textures_set_parent(t_sc_pinfo_textures *x, void *attr, long argc, t_atom *argv){
     if(argv && argc) {
@@ -104,6 +113,23 @@ void sc_pinfo_textures_set_recursion(t_sc_pinfo_textures *x, void *attr, long ar
     }
 }
 
+void sc_pinfo_textures_set_context(t_sc_pinfo_textures *x, void *attr, long argc, t_atom *argv){
+    if(argv && argc) {
+        t_symbol ctemp = x->context;
+        switch(atom_gettype(argv)) {
+            case A_SYM:
+            ctemp = *(atom_getsym(argv));
+            break;
+            default:
+            object_error((t_object*)x, "Bad value for context, expected a symbol");
+            return;
+            break;
+        }
+        
+        x->context = ctemp;
+    }
+}
+
 //attribute accessors
 void sc_pinfo_textures_get_parent(t_sc_pinfo_textures *x, t_object *attr, long *argc, t_atom **argv){
     char alloc;
@@ -121,7 +147,15 @@ void sc_pinfo_textures_get_recursion(t_sc_pinfo_textures *x, t_object *attr, lon
     atom_setlong(*argv, r);
 }
 
+void sc_pinfo_textures_get_context(t_sc_pinfo_textures *x, t_object *attr, long *argc, t_atom **argv) {
+    char alloc;
+    t_symbol c = x->context;
+    atom_alloc(argc, argv, &alloc);
+    atom_setsym(*argv, &c);
+}
 
+
+//MAIN OBJECT CALCULATION
 void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x) {
     t_object* my_patcher = NULL;
     
@@ -148,12 +182,12 @@ void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x) {
         if(obj)
         {
             //object_post((t_object*)x, "Object: %s", object_classname(obj)->s_name);
-            if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0) {
+            if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0 && ((strcmp(jit_attr_getsym(obj, gensym("drawto"))->s_name, x->context.s_name) == 0 || strcmp(x->context.s_name, "") == 0))) {
                 tex_count++;
             }
             
             if(strcmp(object_classname(obj)->s_name, "jpatcher") == 0 && x->use_recursion) {
-                tex_count += t_sc_pinfo_textures_search_sub(obj);
+                tex_count += t_sc_pinfo_textures_search_sub(obj, x->context);
             }
         } else {
             //object_post((t_object*)x, "Null object");
@@ -169,7 +203,8 @@ void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x) {
             if(obj)
             {
                 //object_post((t_object*)x, "Object: %s", object_classname(obj)->s_name);
-                if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0) {
+                //if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0)
+                if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0 && ((strcmp(jit_attr_getsym(obj, gensym("drawto"))->s_name, x->context.s_name) == 0 || strcmp(x->context.s_name, "") == 0))){
                     //object_post((t_object*)x, "Found a texture object!");
                     t_symbol* tname = jit_attr_getsym((void*)obj, gensym("name"));
                     if(tname) {
@@ -179,8 +214,8 @@ void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x) {
                     }
                 }
                 if(strcmp(object_classname(obj)->s_name, "jpatcher") == 0 && x->use_recursion) {
-                    t_atom* subtemp = (t_atom*)sysmem_newptr(sizeof(t_atom) * t_sc_pinfo_textures_search_sub(obj));
-                    long found_names = t_sc_pinfo_textures_get_sub_names(&subtemp, obj);
+                    t_atom* subtemp = (t_atom*)sysmem_newptr(sizeof(t_atom) * t_sc_pinfo_textures_search_sub(obj, x->context));
+                    long found_names = t_sc_pinfo_textures_get_sub_names(&subtemp, obj, x->context);
                     sysmem_copyptr(subtemp, temp, sizeof(t_atom) * found_names);
                     temp += found_names;
                     sysmem_freeptr(subtemp);
@@ -196,7 +231,7 @@ void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x) {
     }
 }
 
-long t_sc_pinfo_textures_search_sub(t_object* patcher){
+long t_sc_pinfo_textures_search_sub(t_object* patcher, t_symbol c){
     t_object* box, *obj;
     
     long temp_count = 0;
@@ -207,11 +242,12 @@ long t_sc_pinfo_textures_search_sub(t_object* patcher){
         obj = jbox_get_object(box);
         if(obj) {
             //post("Found %s", object_classname(obj)->s_name);
-            if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0) {
+            //if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0)
+            if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0 && ((strcmp(jit_attr_getsym(obj, gensym("drawto"))->s_name, c.s_name) == 0 || strcmp(c.s_name, "") == 0))){
                 temp_count += 1;
             }
             if(strcmp(object_classname(obj)->s_name, "jpatcher") == 0) {
-                temp_count += t_sc_pinfo_textures_search_sub(obj);
+                temp_count += t_sc_pinfo_textures_search_sub(obj, c);
             }
         }
     }
@@ -219,9 +255,9 @@ long t_sc_pinfo_textures_search_sub(t_object* patcher){
     return temp_count;
 }
 
-long t_sc_pinfo_textures_get_sub_names(t_atom** list, t_object* patcher) {
+long t_sc_pinfo_textures_get_sub_names(t_atom** list, t_object* patcher, t_symbol c) {
     
-    long found_names = t_sc_pinfo_textures_search_sub(patcher);
+    long found_names = t_sc_pinfo_textures_search_sub(patcher, c);
     
     t_atom* temp_list = *list;
     
@@ -232,7 +268,8 @@ long t_sc_pinfo_textures_get_sub_names(t_atom** list, t_object* patcher) {
         if(obj)
         {
             //object_post((t_object*)x, "Object: %s", object_classname(obj)->s_name);
-            if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0) {
+            //if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0)
+            if(strcmp(object_classname(obj)->s_name, "jit.gl.texture") == 0 && ((strcmp(jit_attr_getsym(obj, gensym("drawto"))->s_name, c.s_name) == 0 || strcmp(c.s_name, "") == 0))){
                // object_post((t_object*)x, "Found a texture object!");
                 t_symbol* tname = jit_attr_getsym((void*)obj, gensym("name"));
                 if(tname) {
@@ -243,8 +280,8 @@ long t_sc_pinfo_textures_get_sub_names(t_atom** list, t_object* patcher) {
                 }
             }
             if(strcmp(object_classname(obj)->s_name, "jpatcher") == 0) {
-                t_atom* sublist = (t_atom*)sysmem_newptr(sizeof(t_atom) * t_sc_pinfo_textures_search_sub(obj));
-                long new_names = t_sc_pinfo_textures_get_sub_names(&sublist, obj);
+                t_atom* sublist = (t_atom*)sysmem_newptr(sizeof(t_atom) * t_sc_pinfo_textures_search_sub(obj, c));
+                long new_names = t_sc_pinfo_textures_get_sub_names(&sublist, obj, c);
                 sysmem_copyptr(sublist, temp_list, sizeof(t_atom) * new_names);
                 temp_list += new_names;
                 sysmem_freeptr(sublist);
@@ -266,6 +303,10 @@ void *t_sc_pinfo_textures_new(t_symbol* s, long argc, t_atom* argv){
     
     if((x = (t_sc_pinfo_textures*)object_alloc(sc_pinfo_textures_class))) {
         x->out = outlet_new(x, NULL);
+        x->context = *gensym("");
+        x->parent_start = 0;
+        x->use_recursion = 0;
+        attr_args_process(x, argc, argv);
     }
     
     return x;
