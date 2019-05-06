@@ -208,7 +208,7 @@ void t_sc_pinfo_textures_bang(t_sc_pinfo_textures* x) {
                     //object_post((t_object*)x, "Found a texture object!");
                     t_symbol* tname = jit_attr_getsym((void*)obj, gensym("name"));
                     if(tname) {
-                        object_post((t_object*)x, "Tex Name: %s", tname->s_name);
+                        //object_post((t_object*)x, "Tex Name: %s", tname->s_name);
                         atom_setsym(temp, tname);
                         temp++;
                     }
